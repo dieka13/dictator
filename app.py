@@ -28,7 +28,6 @@ class MainWindow(wx.Frame):
 
         # --- Left Side ---
         self.text_ctrl = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_RICH2 | wx.TE_NOHIDESEL)
-        # self.text_ctrl = rt.RichTextCtrl(self, style=wx.VSCROLL | wx.HSCROLL)
         self.text_ctrl.SetFont(
             wx.Font(wx.FontInfo(18).Family(wx.FONTFAMILY_MODERN))
         )
@@ -170,7 +169,7 @@ class MainWindow(wx.Frame):
 
         #
         sel_start, sel_end = self.text_ctrl.GetSelection()
-        text = self.text_ctrl.GetStringSelection()
+        sel_str = self.text_ctrl.GetStringSelection()
         s_tag = self.START_TAG_TMPL.format(selected_tag)
         e_tag = self.END_TAG_TMPL.format(selected_tag)
         sel_end_after = sel_end + len(s_tag) + len(e_tag)
@@ -180,13 +179,17 @@ class MainWindow(wx.Frame):
             return
 
         #
-        self.text_ctrl.Replace(sel_start, sel_end, '{}{}{}'.format(s_tag, text, e_tag))
+        self.text_ctrl.Replace(sel_start, sel_end, '{}{}{}'.format(s_tag, sel_str, e_tag))
         self.text_ctrl.SetStyle(sel_start, sel_end_after, tag_style)
         self.text_ctrl.SetInsertionPoint(sel_end_after)
         self.text_ctrl.SetFocus()
 
+        sugg_range = (sel_end_after, self.text_ctrl.GetLastPosition())
+        suggestion = h.suggest_tag(sel_str, self.text_ctrl.GetRange(*sugg_range))
+        for s in suggestion:
+            print(s)
 
-        return sel_start, sel_end_after, text
+        return sel_start, sel_end_after, sel_str
 
     def on_tag_apply(self, evt):
 
@@ -214,34 +217,34 @@ class MainWindow(wx.Frame):
 
         print(self.tag_hist.history)
 
-
     def on_text_keyevt(self, evt):
 
-        if self.text_ctrl.IsEditable():
+        if self.text_ctrl.IsEditable() or self.dirname == '':
             evt.Skip()
             return
 
         pressed_key = h.key_name(evt.GetUnicodeKey())
+        print(pressed_key)
         if pressed_key in self.SHORTCUT_MAP:
             selected_tag = self.TAGS[self.SHORTCUT_MAP[pressed_key]]
             self.apply_tag(selected_tag)
             print(pressed_key, selected_tag)
-
         evt.Skip()
 
     def on_text_click(self, evt):
         cur_pos = self.text_ctrl.GetInsertionPoint()
         cur_sel = self.text_ctrl.GetSelection()
-        self.SetStatusText('Pos: {}, Sel: ({}, {})'.format(cur_pos, *cur_sel), 1)
-        evt.Skip()
+        curr_xy = self.text_ctrl.PositionToXY(cur_pos)[1:]
 
+        self.SetStatusText('Row: {} Col: {} Pos: {} Sel: ({}, {})'.format(*curr_xy[::-1], cur_pos, *cur_sel), 1)
+        evt.Skip()
 
 
 if __name__ == '__main__':
     import wx.lib.inspection
 
     app = wx.App(False)
-    frame = MainWindow(None, 'Annotator')
+    frame = MainWindow(None, 'Dictator')
     frame.SetSize((1000, 500))
     frame.Centre()
     frame.Show()

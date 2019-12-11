@@ -1,3 +1,5 @@
+import re
+
 def key_name(key_code):
 
     if key_code < 256:
@@ -41,3 +43,9 @@ class TagHistory:
 
     def pop_hist(self):
         return self.history.pop()
+
+
+def suggest_tag(token, text):
+
+    match = re.finditer(r'{}'.format(token), text, re.MULTILINE)
+    return match
