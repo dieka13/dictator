@@ -1,6 +1,9 @@
 import re
 
-def key_name(key_code):
+from sortedcontainers import sortedlist
+
+
+def get_key_name(key_code):
 
     if key_code < 256:
         if key_code == 0:
@@ -18,31 +21,31 @@ def key_name(key_code):
 class TagHistory:
 
     def __init__(self):
-        self.history = []
+        self.history = sortedlist.SortedKeyList(key=lambda x: x[0][0])
 
     def add_hist(self, pos, tag):
 
-        if self.is_tagged(pos):
+        if self.get_tag_in(pos) is not None:
             return False
 
-        self.history.append((pos, tag))
+        self.history.add((pos, tag))
         print(self.history)
         return True
 
-    def is_tagged(self, pos):
-        b, e = pos
+    def get_tag_in(self, sel_range):
+        pos_b, pos_e = sel_range
+        in_idx = self.history.bisect_key_right(pos_b)
 
-        for h in self.history:
-            tb, te = h[0]
-            if b >= tb and e <= te:
-                return True
-            else:
-                continue
+        if in_idx > 0:
+            curr_tag = self.history[in_idx-1]
+            tb, te = curr_tag[0]
+            if pos_b >= tb and pos_e <= te:
+                return curr_tag
 
-        return False
+        return None
 
-    def pop_hist(self):
-        return self.history.pop()
+    def delete_history(self, hist):
+        return self.history.remove(hist)
 
 
 def suggest_tag(token, text):

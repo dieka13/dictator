@@ -1,7 +1,6 @@
 import os
 
 import wx
-import wx.richtext as rt
 
 import helper as h
 
@@ -39,30 +38,32 @@ class MainWindow(wx.Frame):
         self.right_sizer.SetMinSize(150, -1)
         self.main_sizer.Add(self.right_sizer, 0, wx.RIGHT | wx.LEFT, 2)
 
-        box = wx.StaticBox(self, wx.ID_ANY, "StaticBox")
-        topBorder, otherBorder = box.GetBordersForSizer()
-        box_sizer = wx.BoxSizer(wx.VERTICAL)
-        box_sizer.AddSpacer(topBorder - 10)
-        text = wx.StaticText(box, wx.ID_ANY, "This window is a child of the staticbox")
-        box_sizer.Add(text, 1, wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT, otherBorder + 30)
-        text2 = wx.StaticText(box, wx.ID_ANY, "This window is a child of the staticbox")
-        box_sizer.Add(text2, 1, wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT, otherBorder + 30)
-        box.SetSizer(box_sizer)
-        self.right_sizer.Add(box, 1, wx.EXPAND|wx.ALL, 2)
+        # box = wx.StaticBox(self, wx.ID_ANY, "StaticBox")
+        # topBorder, otherBorder = box.GetBordersForSizer()
+        # box_sizer = wx.BoxSizer(wx.VERTICAL)
+        # box_sizer.AddSpacer(topBorder - 10)
+        # text = wx.StaticText(box, wx.ID_ANY, "This window is a child of the staticbox")
+        # box_sizer.Add(text, 1, wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT, otherBorder + 30)
+        # text2 = wx.StaticText(box, wx.ID_ANY, "This window is a child of the staticbox")
+        # box_sizer.Add(text2, 1, wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT, otherBorder + 30)
+        # box.SetSizer(box_sizer)
+        # self.right_sizer.Add(box, 1, wx.EXPAND|wx.ALL, 2)
 
         # buttons
         self.buttons = []
-        self.buttons.append(wx.Button(self, -1, 'Tag'))
+        self.buttons.append(wx.Button(self, -1, 'Apply Tag'))
         self.buttons.append(wx.Button(self, -1, 'Remove Tag'))
+        self.buttons.append(wx.Button(self, -1, 'Accept Suggestion'))
+        self.buttons.append(wx.Button(self, -1, 'Remove Suggestion'))
         for b in self.buttons:
             self.right_sizer.Add(b, 0, wx.EXPAND)
 
         #
-        self.edit_toggle = wx.CheckBox(self, -1, "Allow Edit (suspend tagging)")
+        self.edit_toggle = wx.CheckBox(self, -1, "Allow Edit (Suspend Tagging)")
         self.right_sizer.Add(self.edit_toggle)
         self.suggestion_toggle = wx.CheckBox(self, -1, "Tag Suggestion")
         self.right_sizer.Add(self.suggestion_toggle)
-        self.tag_hide_toggle = wx.CheckBox(self, -1, "Hide tagged")
+        self.tag_hide_toggle = wx.CheckBox(self, -1, "Hide Tag")
         self.right_sizer.Add(self.tag_hide_toggle)
 
         #Layout sizers
@@ -205,8 +206,16 @@ class MainWindow(wx.Frame):
         self.apply_tag(selected_tag)
 
     def on_tag_remove(self, evt):
-        pos, tag = self.tag_hist.pop_hist()
-        pos_b, pos_e = pos
+        sel_range = self.text_ctrl.GetSelection()
+
+        # check if selection is tagged
+        sel_tag = self.tag_hist.get_tag_in(sel_range)
+        if sel_tag is None:
+            return
+
+        self.tag_hist.delete_history(sel_tag)
+        pos_b, pos_e = sel_tag[0]
+        tag = sel_tag[1]
         sel_end_after = pos_e - len(self.END_TAG_TMPL.format(tag))
 
         text = self.text_ctrl.GetRange(pos_b + len(self.START_TAG_TMPL.format(tag)), sel_end_after)
@@ -223,12 +232,12 @@ class MainWindow(wx.Frame):
             evt.Skip()
             return
 
-        pressed_key = h.key_name(evt.GetUnicodeKey())
-        print(pressed_key)
+        pressed_key = h.get_key_name(evt.GetUnicodeKey())
+        print('Key:', pressed_key)
         if pressed_key in self.SHORTCUT_MAP:
             selected_tag = self.TAGS[self.SHORTCUT_MAP[pressed_key]]
             self.apply_tag(selected_tag)
-            print(pressed_key, selected_tag)
+            print(selected_tag)
         evt.Skip()
 
     def on_text_click(self, evt):
