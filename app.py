@@ -228,25 +228,30 @@ class MainWindow(wx.Frame):
 
     def on_text_keyevt(self, evt):
 
-        if self.text_ctrl.IsEditable() or self.dirname == '':
+        if self.dirname == '':
             evt.Skip()
             return
 
         pressed_key = h.get_key_name(evt.GetUnicodeKey())
-        print('Key:', pressed_key)
         if pressed_key in self.SHORTCUT_MAP:
             selected_tag = self.TAGS[self.SHORTCUT_MAP[pressed_key]]
             self.apply_tag(selected_tag)
-            print(selected_tag)
+
+        if evt.GetKeyCode() in [wx.WXK_UP, wx.WXK_DOWN, wx.WXK_LEFT, wx.WXK_RIGHT]:
+           self._update_statusbar()
+
         evt.Skip()
 
     def on_text_click(self, evt):
+        self._update_statusbar()
+        evt.Skip()
+
+    def _update_statusbar(self):
         cur_pos = self.text_ctrl.GetInsertionPoint()
         cur_sel = self.text_ctrl.GetSelection()
         curr_xy = self.text_ctrl.PositionToXY(cur_pos)[1:]
 
         self.SetStatusText('Row: {} Col: {} Pos: {} Sel: ({}, {})'.format(*curr_xy[::-1], cur_pos, *cur_sel), 1)
-        evt.Skip()
 
 
 if __name__ == '__main__':

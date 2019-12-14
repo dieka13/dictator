@@ -29,7 +29,7 @@ class TagHistory:
             return False
 
         self.history.add((pos, tag))
-        print(self.history)
+        print(list(self.history.irange_key()))
         return True
 
     def get_tag_in(self, sel_range):
@@ -50,5 +50,5 @@ class TagHistory:
 
 def suggest_tag(token, text):
 
-    match = re.finditer(r'{}'.format(token), text, re.MULTILINE)
+    match = re.finditer(r'{}'.format(token), text, re.MULTILINE | re.IGNORECASE)
     return match
