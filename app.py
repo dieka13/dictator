@@ -19,6 +19,7 @@ class MainWindow(wx.Frame):
         self.dirname = ''
 
         wx.Frame.__init__(self, parent, title=title)
+        self.TITLE = title
 
         # Init main layout sizer
         self.init_menubar()
@@ -53,6 +54,7 @@ class MainWindow(wx.Frame):
         self.buttons = []
         self.buttons.append(wx.Button(self, -1, 'Apply Tag'))
         self.buttons.append(wx.Button(self, -1, 'Remove Tag'))
+        self.buttons.append(wx.Button(self, wx.ID_SAVE, 'Export / Save'))
         for b in self.buttons:
             self.right_sizer.Add(b, 0, wx.EXPAND)
 
@@ -85,7 +87,7 @@ class MainWindow(wx.Frame):
 
         configMenu = wx.Menu()
         menuTagConfig = configMenu.Append(0, '&Tag Configuration', ' Configure tags settings')
-        menuEditorConfig = configMenu.Append(0, '&Editor Configuration', ' Configure editor settings')
+        menuEditorConfig = configMenu.Append(wx.ID_SELECT_FONT, '&Editor Configuration', ' Configure editor settings')
 
         # Creating the menubar.
         menuBar = wx.MenuBar()
@@ -97,6 +99,7 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.OnOpen, menuOpen)
         self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
         self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
+        self.Bind(wx.EVT_MENU, self.OnEditorConfig, menuEditorConfig)
 
     def init_statusbar(self):
         # add status bar
@@ -108,7 +111,6 @@ class MainWindow(wx.Frame):
     def init_bindings(self):
 
         self.edit_toggle.Bind(wx.EVT_CHECKBOX, self.on_edit_toggle)
-        self.text_ctrl.Bind(wx.EVT_TEXT, self.on_editor_change)
         self.buttons[0].Bind(wx.EVT_BUTTON, self.on_tag_apply)
         self.buttons[1].Bind(wx.EVT_BUTTON, self.on_tag_remove)
         self.text_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_text_keyevt)
@@ -127,7 +129,7 @@ class MainWindow(wx.Frame):
 
     def OnAbout(self, evt):
         # Create a message dialog box
-        dlg = wx.MessageDialog(self, ' A sample editor \n in wxPython', 'About Sample Editor', wx.OK)
+        dlg = wx.MessageDialog(self, ' NER Dataset Annotator (Dictator) \n Dieka Nugraha K (diekanugraha@gmail.com)', 'About Dictator', wx.OK)
         dlg.ShowModal()  # Shows it
         dlg.Destroy()  # finally destroy it when finished.
 
@@ -144,22 +146,34 @@ class MainWindow(wx.Frame):
             with open(path, 'r', encoding='utf-8') as f:
                 self.text_ctrl.SetValue(f.read())
             self.SetStatusText('File: {} Loaded!'.format(path))
-            self.SetTitle(self.GetTitle() + ' ({})'.format(self.filename))
+            self.SetTitle(self.TITLE + ' ({})'.format(self.filename))
             self.tag_hist.reset()
         dlg.Destroy()
+
+    def OnEditorConfig(self, evt):
+
+        data = wx.FontData()
+        data.SetChosenFont(self.text_ctrl.GetFont())
+
+        dlg = wx.FontDialog(self, data)
+        if dlg.ShowModal() == wx.ID_OK:
+            font_sel = dlg.GetFontData()
+            self.text_ctrl.SetFont(font_sel.GetChosenFont())
+            dlg.Destroy()
+
+        evt.Skip()
 
     def on_edit_toggle(self, evt):
         state = not self.text_ctrl.IsEditable()
         self.text_ctrl.SetEditable(state)
 
+        for b in self.buttons:
+            b.Enable(not state)
+
         if state:
             self.text_ctrl.SetBackgroundColour(wx.Colour(247, 225, 126))
         else:
             self.text_ctrl.SetBackgroundColour(wx.Colour('WHITE'))
-
-    def on_editor_change(self, evt):
-        # print('textctl event')
-        pass
 
     def apply_tag(self, selected_tag, tag_style=None):
 
@@ -180,7 +194,7 @@ class MainWindow(wx.Frame):
         sel_end_after = sel_end
 
         #  try to tag selection
-        if not self.tag_hist.add_tag((sel_start, sel_end_after), selected_tag):
+        if self.tag_hist.add_tag((sel_start, sel_end_after), selected_tag) is None:
             return
 
         #  paint tag
@@ -199,13 +213,14 @@ class MainWindow(wx.Frame):
                 self.text_ctrl.SetStyle(*sel_range, self.TAG_STYLE)
 
         print('add:', list(self.tag_hist.tags.irange_key()))
+        print(self.tag_hist.history)
 
         return sel_start, sel_end_after, sel_str
 
     def on_tag_apply(self, evt):
 
         # show modal to select tags
-        tag_dlg = wx.SingleChoiceDialog(self, 'Select apply_tag you want to apply :'.title(), 'Select Tag', self.TAGS)
+        tag_dlg = wx.SingleChoiceDialog(self, 'Select tag you want to apply :'.title(), 'Select Tag', self.TAGS)
         tag_dlg.SetSize((150, 300))
         if tag_dlg.ShowModal() == wx.ID_OK:
             selected_tag = tag_dlg.GetStringSelection()
@@ -217,13 +232,7 @@ class MainWindow(wx.Frame):
 
     def on_tag_remove(self, evt):
         sel_range = self.text_ctrl.GetSelection()
-
-        # check if selection is tagged
-        sel_tag = self.tag_hist.get_tag_in(sel_range)
-        if sel_tag is None:
-            return
-
-        self.tag_hist.delete_tag(sel_tag)
+        sel_tag = self.tag_hist.delete_tag(sel_range)
         pos_b, pos_e = sel_tag[0]
         tag = sel_tag[1]
         # sel_end_after = pos_e - len(self.END_TAG_TMPL.format(tag))
@@ -237,6 +246,7 @@ class MainWindow(wx.Frame):
         self.text_ctrl.SetFocus()
 
         print('rem:', list(self.tag_hist.tags.irange_key()))
+        print(self.tag_hist.history)
 
     def on_text_keyevt(self, evt):
 

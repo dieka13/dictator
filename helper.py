@@ -23,6 +23,7 @@ class TagHistory:
 
     def __init__(self, original_txt=None):
         self.tags = sortedlist.SortedKeyList(key=lambda x: x[0][0])
+        self.history = []
         self.suggestion = sortedlist.SortedKeyList(key=lambda x: x[0][0])
         self.original_txt = original_txt
 
@@ -32,13 +33,21 @@ class TagHistory:
     def add_tag(self, sel_range, tag):
 
         if self.get_tag_in(sel_range) is not None:
-            return False
+            return None
 
-        self.tags.add((sel_range, tag))
-        return True
+        tag = (sel_range, tag)
+        self.tags.add(tag)
+        self.history.append(('add', tag))
+        return tag
 
-    def delete_tag(self, hist):
-        return self.tags.remove(hist)
+    def delete_tag(self, sel_range):
+
+        tag = self.get_tag_in(sel_range)
+        if tag is None: return None
+
+        self.history.append(('del', tag))
+        self.tags.remove(tag)
+        return tag
 
     def get_tag_in(self, sel_range):
         pos_b, pos_e = sel_range
@@ -54,6 +63,7 @@ class TagHistory:
 
     def reset(self):
         self.tags.clear()
+        self.history.clear()
 
 
 def suggest_tag(token, text, with_bigram=True):
