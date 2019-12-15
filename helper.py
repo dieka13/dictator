@@ -1,4 +1,5 @@
 import re
+from itertools import chain
 
 from sortedcontainers import sortedlist
 
@@ -20,35 +21,53 @@ def get_key_name(key_code):
 
 class TagHistory:
 
-    def __init__(self):
-        self.history = sortedlist.SortedKeyList(key=lambda x: x[0][0])
+    def __init__(self, original_txt=None):
+        self.tags = sortedlist.SortedKeyList(key=lambda x: x[0][0])
+        self.suggestion = sortedlist.SortedKeyList(key=lambda x: x[0][0])
+        self.original_txt = original_txt
 
-    def add_hist(self, pos, tag):
+    def set_original_txt(self, original_txt):
+        self.original_txt = original_txt
 
-        if self.get_tag_in(pos) is not None:
+    def add_tag(self, sel_range, tag):
+
+        if self.get_tag_in(sel_range) is not None:
             return False
 
-        self.history.add((pos, tag))
-        print(list(self.history.irange_key()))
+        self.tags.add((sel_range, tag))
         return True
+
+    def delete_tag(self, hist):
+        return self.tags.remove(hist)
 
     def get_tag_in(self, sel_range):
         pos_b, pos_e = sel_range
-        in_idx = self.history.bisect_key_right(pos_b)
+        in_idx = self.tags.bisect_key_right(pos_b)
 
         if in_idx > 0:
-            curr_tag = self.history[in_idx-1]
+            curr_tag = self.tags[in_idx - 1]
             tb, te = curr_tag[0]
             if pos_b >= tb and pos_e <= te:
                 return curr_tag
 
         return None
 
-    def delete_history(self, hist):
-        return self.history.remove(hist)
+    def reset(self):
+        self.tags.clear()
 
 
-def suggest_tag(token, text):
+def suggest_tag(token, text, with_bigram=True):
 
     match = re.finditer(r'{}'.format(token), text, re.MULTILINE | re.IGNORECASE)
+
+    token = token.split()
+    if with_bigram and len(token) >= 3:
+        bigram_match = []
+
+        for i in range(len(token)-1):
+            m = re.finditer(' '.join((token[i], token[i+1])), text, re.MULTILINE | re.IGNORECASE)
+            bigram_match.extend(m)
+
+        return chain(match, bigram_match)
+
     return match

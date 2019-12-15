@@ -53,8 +53,6 @@ class MainWindow(wx.Frame):
         self.buttons = []
         self.buttons.append(wx.Button(self, -1, 'Apply Tag'))
         self.buttons.append(wx.Button(self, -1, 'Remove Tag'))
-        self.buttons.append(wx.Button(self, -1, 'Accept Suggestion'))
-        self.buttons.append(wx.Button(self, -1, 'Remove Suggestion'))
         for b in self.buttons:
             self.right_sizer.Add(b, 0, wx.EXPAND)
 
@@ -62,6 +60,7 @@ class MainWindow(wx.Frame):
         self.edit_toggle = wx.CheckBox(self, -1, "Allow Edit (Suspend Tagging)")
         self.right_sizer.Add(self.edit_toggle)
         self.suggestion_toggle = wx.CheckBox(self, -1, "Tag Suggestion")
+        self.suggestion_toggle.SetValue(True)
         self.right_sizer.Add(self.suggestion_toggle)
         self.tag_hide_toggle = wx.CheckBox(self, -1, "Hide Tag")
         self.right_sizer.Add(self.tag_hide_toggle)
@@ -122,17 +121,20 @@ class MainWindow(wx.Frame):
         self.TAG_STYLE.SetBackgroundColour(wx.Colour(145, 221, 254))
         self.TAG_STYLE.SetTextColour(wx.WHITE)
 
+        self.SUGGESTION_STYLE = wx.TextAttr()
+        self.SUGGESTION_STYLE.SetBackgroundColour(wx.Colour(221, 254, 145))
 
-    def OnAbout(self,e):
+
+    def OnAbout(self, evt):
         # Create a message dialog box
         dlg = wx.MessageDialog(self, ' A sample editor \n in wxPython', 'About Sample Editor', wx.OK)
-        dlg.ShowModal() # Shows it
-        dlg.Destroy() # finally destroy it when finished.
+        dlg.ShowModal()  # Shows it
+        dlg.Destroy()  # finally destroy it when finished.
 
-    def OnExit(self,e):
+    def OnExit(self, evt):
         self.Close(True)  # Close the frame.
 
-    def OnOpen(self,e):
+    def OnOpen(self, evt):
         ''' Open a file'''
         dlg = wx.FileDialog(self, 'Choose a file', self.dirname, '', '*.txt', wx.FD_OPEN)
         if dlg.ShowModal() == wx.ID_OK:
@@ -143,6 +145,7 @@ class MainWindow(wx.Frame):
                 self.text_ctrl.SetValue(f.read())
             self.SetStatusText('File: {} Loaded!'.format(path))
             self.SetTitle(self.GetTitle() + ' ({})'.format(self.filename))
+            self.tag_hist.reset()
         dlg.Destroy()
 
     def on_edit_toggle(self, evt):
@@ -168,27 +171,34 @@ class MainWindow(wx.Frame):
         if tag_style is None:
             tag_style = self.TAG_STYLE
 
-        #
+        #  calculate tag position
         sel_start, sel_end = self.text_ctrl.GetSelection()
         sel_str = self.text_ctrl.GetStringSelection()
-        s_tag = self.START_TAG_TMPL.format(selected_tag)
-        e_tag = self.END_TAG_TMPL.format(selected_tag)
-        sel_end_after = sel_end + len(s_tag) + len(e_tag)
+        # s_tag = self.START_TAG_TMPL.format(selected_tag)
+        # e_tag = self.END_TAG_TMPL.format(selected_tag)
+        # sel_end_after = sel_end + len(s_tag) + len(e_tag)
+        sel_end_after = sel_end
 
-        #
-        if not self.tag_hist.add_hist((sel_start, sel_end_after), selected_tag):
+        #  try to tag selection
+        if not self.tag_hist.add_tag((sel_start, sel_end_after), selected_tag):
             return
 
-        #
-        self.text_ctrl.Replace(sel_start, sel_end, '{}{}{}'.format(s_tag, sel_str, e_tag))
+        #  paint tag
+        # self.text_ctrl.Replace(sel_start, sel_end, '{}{}{}'.format(s_tag, sel_str, e_tag))
         self.text_ctrl.SetStyle(sel_start, sel_end_after, tag_style)
         self.text_ctrl.SetInsertionPoint(sel_end_after)
         self.text_ctrl.SetFocus()
 
-        sugg_range = (sel_end_after, self.text_ctrl.GetLastPosition())
-        suggestion = h.suggest_tag(sel_str, self.text_ctrl.GetRange(*sugg_range))
-        for s in suggestion:
-            print(s)
+        #  auto tag suggestion if tag suggestion checkbox is ticked
+        if self.suggestion_toggle.IsChecked():
+            sugg_range = (sel_end_after, self.text_ctrl.GetLastPosition())
+            suggestion = h.suggest_tag(sel_str, self.text_ctrl.GetRange(*sugg_range))
+            for s in suggestion:
+                sel_range = tuple(r + sel_end_after for r in s.span())
+                self.tag_hist.add_tag(sel_range, selected_tag)
+                self.text_ctrl.SetStyle(*sel_range, self.TAG_STYLE)
+
+        print('add:', list(self.tag_hist.tags.irange_key()))
 
         return sel_start, sel_end_after, sel_str
 
@@ -213,18 +223,20 @@ class MainWindow(wx.Frame):
         if sel_tag is None:
             return
 
-        self.tag_hist.delete_history(sel_tag)
+        self.tag_hist.delete_tag(sel_tag)
         pos_b, pos_e = sel_tag[0]
         tag = sel_tag[1]
-        sel_end_after = pos_e - len(self.END_TAG_TMPL.format(tag))
+        # sel_end_after = pos_e - len(self.END_TAG_TMPL.format(tag))
+        sel_end_after = pos_e
 
-        text = self.text_ctrl.GetRange(pos_b + len(self.START_TAG_TMPL.format(tag)), sel_end_after)
+        # text = self.text_ctrl.GetRange(pos_b + len(self.START_TAG_TMPL.format(tag)), sel_end_after)
+        text = self.text_ctrl.GetRange(pos_b, sel_end_after)
         self.text_ctrl.Replace(pos_b, pos_e, text)
         self.text_ctrl.SetStyle(pos_b, sel_end_after, self.text_ctrl.GetDefaultStyle())
         self.text_ctrl.SetInsertionPoint(pos_b)
         self.text_ctrl.SetFocus()
 
-        print(self.tag_hist.history)
+        print('rem:', list(self.tag_hist.tags.irange_key()))
 
     def on_text_keyevt(self, evt):
 
@@ -232,11 +244,13 @@ class MainWindow(wx.Frame):
             evt.Skip()
             return
 
+        # filter tag shortcut
         pressed_key = h.get_key_name(evt.GetUnicodeKey())
         if pressed_key in self.SHORTCUT_MAP:
             selected_tag = self.TAGS[self.SHORTCUT_MAP[pressed_key]]
             self.apply_tag(selected_tag)
 
+        # change statusbar when arrow key pressed
         if evt.GetKeyCode() in [wx.WXK_UP, wx.WXK_DOWN, wx.WXK_LEFT, wx.WXK_RIGHT]:
            self._update_statusbar()
 
