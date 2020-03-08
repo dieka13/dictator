@@ -12,6 +12,7 @@ class MainWindow(wx.Frame):
 
     TAGS = ['Per', 'Tit', 'Org', 'Loc', 'Date']
     SHORTCUT_MAP = {t[0]: i for i, t in enumerate(TAGS)}
+    TAG_COLOUR = ((87, 117, 144), (243, 202, 64), (242, 165, 65), (240, 138, 75), (215, 138, 118))
 
     tag_hist = h.TagHistory()
 
@@ -59,15 +60,15 @@ class MainWindow(wx.Frame):
             self.right_sizer.Add(b, 0, wx.EXPAND)
 
         #
-        self.edit_toggle = wx.CheckBox(self, -1, "Allow Edit (Suspend Tagging)")
-        self.right_sizer.Add(self.edit_toggle)
+        # self.edit_toggle = wx.CheckBox(self, -1, "Allow Edit (Suspend Tagging)")
+        # self.right_sizer.Add(self.edit_toggle)
         self.suggestion_toggle = wx.CheckBox(self, -1, "Tag Suggestion")
         self.suggestion_toggle.SetValue(True)
         self.right_sizer.Add(self.suggestion_toggle)
-        self.tag_hide_toggle = wx.CheckBox(self, -1, "Hide Tag")
-        self.right_sizer.Add(self.tag_hide_toggle)
+        # self.tag_hide_toggle = wx.CheckBox(self, -1, "Hide Tag")
+        # self.right_sizer.Add(self.tag_hide_toggle)
 
-        #Layout sizers
+        #  Layout sizers
         self.SetSizer(self.main_sizer)
         self.SetAutoLayout(True)
         self.main_sizer.Fit(self)
@@ -96,9 +97,9 @@ class MainWindow(wx.Frame):
         self.SetMenuBar(menuBar)  # Adding the MenuBar to the Frame content.
 
         # Events.
-        self.Bind(wx.EVT_MENU, self.OnOpen, menuOpen)
-        self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
-        self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
+        self.Bind(wx.EVT_MENU, self.on_file_open, menuOpen)
+        self.Bind(wx.EVT_MENU, self.on_app_exit, menuExit)
+        self.Bind(wx.EVT_MENU, self.on_menu_about, menuAbout)
         self.Bind(wx.EVT_MENU, self.OnEditorConfig, menuEditorConfig)
 
     def init_statusbar(self):
@@ -110,7 +111,7 @@ class MainWindow(wx.Frame):
 
     def init_bindings(self):
 
-        self.edit_toggle.Bind(wx.EVT_CHECKBOX, self.on_edit_toggle)
+        # self.edit_toggle.Bind(wx.EVT_CHECKBOX, self.on_edit_toggle)
         self.buttons[0].Bind(wx.EVT_BUTTON, self.on_tag_apply)
         self.buttons[1].Bind(wx.EVT_BUTTON, self.on_tag_remove)
         self.text_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_text_keyevt)
@@ -118,26 +119,32 @@ class MainWindow(wx.Frame):
 
     def init_color(self):
 
-        # define apply_tag background style
+        # define apply_tag background styl
         self.TAG_STYLE = wx.TextAttr()
         self.TAG_STYLE.SetBackgroundColour(wx.Colour(145, 221, 254))
         self.TAG_STYLE.SetTextColour(wx.WHITE)
+
+        self.TAG_STYLES = []
+        for c in self.TAG_COLOUR:
+            attr = wx.TextAttr()
+            attr.SetBackgroundColour(wx.Colour(*c))
+            attr.SetTextColour(wx.WHITE)
+            self.TAG_STYLES.append(attr)
 
         self.SUGGESTION_STYLE = wx.TextAttr()
         self.SUGGESTION_STYLE.SetBackgroundColour(wx.Colour(221, 254, 145))
 
 
-    def OnAbout(self, evt):
+    def on_menu_about(self, evt):
         # Create a message dialog box
-        dlg = wx.MessageDialog(self, ' NER Dataset Annotator (Dictator) \n Dieka Nugraha K (diekanugraha@gmail.com)', 'About Dictator', wx.OK)
+        dlg = wx.MessageDialog(self, ' NER Dataset Annotator (Dictator) \n Dieka Nugraha K (diekanugraha@gmail.com )', 'About Dictator', wx.OK)
         dlg.ShowModal()  # Shows it
         dlg.Destroy()  # finally destroy it when finished.
 
-    def OnExit(self, evt):
+    def on_app_exit(self, evt):
         self.Close(True)  # Close the frame.
 
-    def OnOpen(self, evt):
-        ''' Open a file'''
+    def on_file_open(self, evt):
         dlg = wx.FileDialog(self, 'Choose a file', self.dirname, '', '*.txt', wx.FD_OPEN)
         if dlg.ShowModal() == wx.ID_OK:
             self.filename = dlg.GetFilename()
@@ -220,15 +227,20 @@ class MainWindow(wx.Frame):
     def on_tag_apply(self, evt):
 
         # show modal to select tags
-        tag_dlg = wx.SingleChoiceDialog(self, 'Select tag you want to apply :'.title(), 'Select Tag', self.TAGS)
+        tag_dlg = wx.SingleChoiceDialog(
+            self,
+            'Select tag you want to apply :'.title(),
+            'Select Tag',
+            ['{} [{}]'.format(k, v) for k, v in zip(self.TAGS, self.SHORTCUT_MAP.keys())]
+        )
         tag_dlg.SetSize((150, 300))
         if tag_dlg.ShowModal() == wx.ID_OK:
-            selected_tag = tag_dlg.GetStringSelection()
+            selected_tag_id = tag_dlg.GetSelection()
         else:
             return
         tag_dlg.Destroy()
 
-        self.apply_tag(selected_tag)
+        self.apply_tag(self.TAGS[selected_tag_id], self.TAG_STYLES[selected_tag_id])
 
     def on_tag_remove(self, evt):
         sel_range = self.text_ctrl.GetSelection()
@@ -257,8 +269,8 @@ class MainWindow(wx.Frame):
         # filter tag shortcut
         pressed_key = h.get_key_name(evt.GetUnicodeKey())
         if pressed_key in self.SHORTCUT_MAP:
-            selected_tag = self.TAGS[self.SHORTCUT_MAP[pressed_key]]
-            self.apply_tag(selected_tag)
+            selected_tag_id = self.SHORTCUT_MAP[pressed_key]
+            self.apply_tag(self.TAGS[selected_tag_id], self.TAG_STYLES[selected_tag_id])
 
         # change statusbar when arrow key pressed
         if evt.GetKeyCode() in [wx.WXK_UP, wx.WXK_DOWN, wx.WXK_LEFT, wx.WXK_RIGHT]:
