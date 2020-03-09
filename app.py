@@ -7,12 +7,9 @@ import helper as h
 
 class MainWindow(wx.Frame):
 
-    START_TAG_TMPL = '<{}>'
-    END_TAG_TMPL = '</{}>'
-
     TAGS = ['Per', 'Tit', 'Org', 'Loc', 'Date']
     SHORTCUT_MAP = {t[0]: i for i, t in enumerate(TAGS)}
-    TAG_COLOUR = ((87, 117, 144), (243, 202, 64), (242, 165, 65), (240, 138, 75), (215, 138, 118))
+    TAG_COLOUR = ((116, 165, 127), (187, 68, 48), (126, 189, 194), (228, 146, 115), (163, 122, 116))
 
     tag_hist = h.TagHistory()
 
@@ -100,7 +97,7 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_file_open, menuOpen)
         self.Bind(wx.EVT_MENU, self.on_app_exit, menuExit)
         self.Bind(wx.EVT_MENU, self.on_menu_about, menuAbout)
-        self.Bind(wx.EVT_MENU, self.OnEditorConfig, menuEditorConfig)
+        self.Bind(wx.EVT_MENU, self.on_editor_config, menuEditorConfig)
 
     def init_statusbar(self):
         # add status bar
@@ -134,7 +131,6 @@ class MainWindow(wx.Frame):
         self.SUGGESTION_STYLE = wx.TextAttr()
         self.SUGGESTION_STYLE.SetBackgroundColour(wx.Colour(221, 254, 145))
 
-
     def on_menu_about(self, evt):
         # Create a message dialog box
         dlg = wx.MessageDialog(self, ' NER Dataset Annotator (Dictator) \n Dieka Nugraha K (diekanugraha@gmail.com )', 'About Dictator', wx.OK)
@@ -157,7 +153,7 @@ class MainWindow(wx.Frame):
             self.tag_hist.reset()
         dlg.Destroy()
 
-    def OnEditorConfig(self, evt):
+    def on_editor_config(self, evt):
 
         data = wx.FontData()
         data.SetChosenFont(self.text_ctrl.GetFont())
@@ -195,9 +191,6 @@ class MainWindow(wx.Frame):
         #  calculate tag position
         sel_start, sel_end = self.text_ctrl.GetSelection()
         sel_str = self.text_ctrl.GetStringSelection()
-        # s_tag = self.START_TAG_TMPL.format(selected_tag)
-        # e_tag = self.END_TAG_TMPL.format(selected_tag)
-        # sel_end_after = sel_end + len(s_tag) + len(e_tag)
         sel_end_after = sel_end
 
         #  try to tag selection
@@ -216,8 +209,8 @@ class MainWindow(wx.Frame):
             suggestion = h.suggest_tag(sel_str, self.text_ctrl.GetRange(*sugg_range))
             for s in suggestion:
                 sel_range = tuple(r + sel_end_after for r in s.span())
-                self.tag_hist.add_tag(sel_range, selected_tag)
-                self.text_ctrl.SetStyle(*sel_range, self.TAG_STYLE)
+                if self.tag_hist.add_tag(sel_range, selected_tag) is not None:
+                    self.text_ctrl.SetStyle(*sel_range, tag_style)
 
         print('add:', list(self.tag_hist.tags.irange_key()))
         print(self.tag_hist.history)
@@ -231,7 +224,8 @@ class MainWindow(wx.Frame):
             self,
             'Select tag you want to apply :'.title(),
             'Select Tag',
-            ['{} [{}]'.format(k, v) for k, v in zip(self.TAGS, self.SHORTCUT_MAP.keys())]
+            ['{} [{}]'.format(k, v) for k, v
+             in zip(self.TAGS, self.SHORTCUT_MAP.keys())]
         )
         tag_dlg.SetSize((150, 300))
         if tag_dlg.ShowModal() == wx.ID_OK:
@@ -247,7 +241,6 @@ class MainWindow(wx.Frame):
         sel_tag = self.tag_hist.delete_tag(sel_range)
         pos_b, pos_e = sel_tag[0]
         tag = sel_tag[1]
-        # sel_end_after = pos_e - len(self.END_TAG_TMPL.format(tag))
         sel_end_after = pos_e
 
         # text = self.text_ctrl.GetRange(pos_b + len(self.START_TAG_TMPL.format(tag)), sel_end_after)
@@ -294,10 +287,9 @@ if __name__ == '__main__':
     import wx.lib.inspection
 
     app = wx.App(False)
-    frame = MainWindow(None, 'Dictator')
+    frame = MainWindow(None, 'Dictator -- NER Tagger')
     frame.SetSize((1000, 500))
     frame.Centre()
     frame.Show()
     # wx.lib.inspection.InspectionTool().Show()
     app.MainLoop()
-

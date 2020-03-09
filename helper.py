@@ -32,7 +32,7 @@ class TagHistory:
 
     def add_tag(self, sel_range, tag):
 
-        if self.get_tag_in(sel_range) is not None:
+        if not self.check_range_empty(sel_range):
             return None
 
         tag = (sel_range, tag)
@@ -43,7 +43,8 @@ class TagHistory:
     def delete_tag(self, sel_range):
 
         tag = self.get_tag_in(sel_range)
-        if tag is None: return None
+        if tag is None:
+            return None
 
         self.history.append(('del', tag))
         self.tags.remove(tag)
@@ -60,6 +61,25 @@ class TagHistory:
                 return curr_tag
 
         return None
+
+    def check_range_empty(self, sel_range):
+        pos_b, pos_e = sel_range
+
+        if len(self.tags) == 0:
+            return True
+
+        idx = self.tags.bisect_key_left(pos_b)
+
+        # check left tag
+        if idx > 0 and \
+                check_range_intersect(sel_range, self.tags[idx - 1][0]):
+            return False
+        # check right tag
+        if idx+1 <= len(self.tags) and \
+                check_range_intersect(sel_range, self.tags[idx][0]):
+            return False
+
+        return True
 
     def reset(self):
         self.tags.clear()
@@ -81,3 +101,13 @@ def suggest_tag(token, text, with_bigram=True):
         return chain(match, bigram_match)
 
     return match
+
+
+def check_range_intersect(range_a, range_b):
+        a_s, a_e = range_a
+        b_s, b_e = range_b
+
+        if b_s > a_e or a_s > b_e:
+            return False
+
+        return True
