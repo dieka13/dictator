@@ -1,4 +1,5 @@
 import os
+import logging
 
 import wx
 
@@ -70,7 +71,7 @@ class MainWindow(wx.Frame):
         self.SetAutoLayout(True)
         self.main_sizer.Fit(self)
 
-        #
+        #  init app default settings
         self.init_bindings()
         self.init_color()
 
@@ -108,9 +109,8 @@ class MainWindow(wx.Frame):
 
     def init_bindings(self):
 
-        # self.edit_toggle.Bind(wx.EVT_CHECKBOX, self.on_edit_toggle)
-        self.buttons[0].Bind(wx.EVT_BUTTON, self.on_tag_apply)
-        self.buttons[1].Bind(wx.EVT_BUTTON, self.on_tag_remove)
+        self.buttons[0].Bind(wx.EVT_BUTTON, self.on_btn_tag_apply)
+        self.buttons[1].Bind(wx.EVT_BUTTON, self.on_btn_tag_remove)
         self.text_ctrl.Bind(wx.EVT_KEY_DOWN, self.on_text_keyevt)
         self.text_ctrl.Bind(wx.EVT_LEFT_UP, self.on_text_click)
 
@@ -132,10 +132,9 @@ class MainWindow(wx.Frame):
         self.SUGGESTION_STYLE.SetBackgroundColour(wx.Colour(221, 254, 145))
 
     def on_menu_about(self, evt):
-        # Create a message dialog box
         dlg = wx.MessageDialog(self, ' NER Dataset Annotator (Dictator) \n Dieka Nugraha K (diekanugraha@gmail.com )', 'About Dictator', wx.OK)
-        dlg.ShowModal()  # Shows it
-        dlg.Destroy()  # finally destroy it when finished.
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def on_app_exit(self, evt):
         self.Close(True)  # Close the frame.
@@ -148,10 +147,16 @@ class MainWindow(wx.Frame):
             path = os.path.join(self.dirname, self.filename)
             with open(path, 'r', encoding='utf-8') as f:
                 self.text_ctrl.SetValue(f.read())
+
+            # (re) init the editor
             self.SetStatusText('File: {} Loaded!'.format(path))
             self.SetTitle(self.TITLE + ' ({})'.format(self.filename))
             self.tag_hist.reset()
+
+            logging.info('file loaded: {}'.format(path))
         dlg.Destroy()
+
+
 
     def on_editor_config(self, evt):
 
@@ -189,8 +194,7 @@ class MainWindow(wx.Frame):
             tag_style = self.TAG_STYLE
 
         #  calculate tag position
-        sel_start, sel_end = self.text_ctrl.GetSelection()
-        sel_str = self.text_ctrl.GetStringSelection()
+        (sel_start, sel_end), sel_str = self._trim_selection()
         sel_end_after = sel_end
 
         #  try to tag selection
@@ -198,10 +202,12 @@ class MainWindow(wx.Frame):
             return
 
         #  paint tag
-        # self.text_ctrl.Replace(sel_start, sel_end, '{}{}{}'.format(s_tag, sel_str, e_tag))
         self.text_ctrl.SetStyle(sel_start, sel_end_after, tag_style)
         self.text_ctrl.SetInsertionPoint(sel_end_after)
         self.text_ctrl.SetFocus()
+
+        # log
+        logging.info('TAG add: {} ({}, {}) \"{}\" '.format(selected_tag, sel_start, sel_end, sel_str))
 
         #  auto tag suggestion if tag suggestion checkbox is ticked
         if self.suggestion_toggle.IsChecked():
@@ -211,13 +217,14 @@ class MainWindow(wx.Frame):
                 sel_range = tuple(r + sel_end_after for r in s.span())
                 if self.tag_hist.add_tag(sel_range, selected_tag) is not None:
                     self.text_ctrl.SetStyle(*sel_range, tag_style)
+                    logging.info('TAG sugg: {} ({}, {}) \"{}\" '.format(selected_tag, *sel_range, s.group(0)))
 
-        print('add:', list(self.tag_hist.tags.irange_key()))
-        print(self.tag_hist.history)
+        logging.debug('tags: {}'.format(str(list(self.tag_hist.tags.irange_key()))))
+        logging.debug('history: {}'.format(str(self.tag_hist.history)))
 
         return sel_start, sel_end_after, sel_str
 
-    def on_tag_apply(self, evt):
+    def on_btn_tag_apply(self, evt):
 
         # show modal to select tags
         tag_dlg = wx.SingleChoiceDialog(
@@ -236,22 +243,21 @@ class MainWindow(wx.Frame):
 
         self.apply_tag(self.TAGS[selected_tag_id], self.TAG_STYLES[selected_tag_id])
 
-    def on_tag_remove(self, evt):
+    def on_btn_tag_remove(self, evt):
         sel_range = self.text_ctrl.GetSelection()
         sel_tag = self.tag_hist.delete_tag(sel_range)
         pos_b, pos_e = sel_tag[0]
-        tag = sel_tag[1]
         sel_end_after = pos_e
 
-        # text = self.text_ctrl.GetRange(pos_b + len(self.START_TAG_TMPL.format(tag)), sel_end_after)
         text = self.text_ctrl.GetRange(pos_b, sel_end_after)
         self.text_ctrl.Replace(pos_b, pos_e, text)
         self.text_ctrl.SetStyle(pos_b, sel_end_after, self.text_ctrl.GetDefaultStyle())
         self.text_ctrl.SetInsertionPoint(pos_b)
         self.text_ctrl.SetFocus()
 
-        print('rem:', list(self.tag_hist.tags.irange_key()))
-        print(self.tag_hist.history)
+        logging.info('TAG rem: {} ({}, {}) \"{}\" '.format(sel_tag[1], *sel_range, text))
+        logging.debug('tags: {}'.format(str(list(self.tag_hist.tags.irange_key()))))
+        logging.debug('history: {}'.format(str(self.tag_hist.history)))
 
     def on_text_keyevt(self, evt):
 
@@ -282,9 +288,27 @@ class MainWindow(wx.Frame):
 
         self.SetStatusText('Row: {} Col: {} Pos: {} Sel: ({}, {})'.format(*curr_xy[::-1], cur_pos, *cur_sel), 1)
 
+    def _trim_selection(self):
+        sel_start, sel_end = self.text_ctrl.GetSelection()
+        sel_str = self.text_ctrl.GetStringSelection()
+
+        sel_str = sel_str.lstrip()
+        sel_start += (sel_end - sel_start) - len(sel_str)
+
+        sel_str = sel_str.rstrip()
+        sel_end -= (sel_end - sel_start) - len(sel_str)
+
+        return (sel_start, sel_end), sel_str
+
 
 if __name__ == '__main__':
     import wx.lib.inspection
+
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)s: %(message)s',
+        # datefmt='%m/%d/%Y %I:%M:%S',
+        datefmt='%I:%M:%S',
+        level=logging.INFO)
 
     app = wx.App(False)
     frame = MainWindow(None, 'Dictator -- NER Tagger')
