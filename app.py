@@ -16,6 +16,7 @@ class MainWindow(wx.Frame):
 
     def __init__(self, parent, title):
         self.dirname = ''
+        self.filename = None
 
         wx.Frame.__init__(self, parent, title=title)
         self.TITLE = title
@@ -79,7 +80,9 @@ class MainWindow(wx.Frame):
 
         # Setting up the menu.
         filemenu = wx.Menu()
-        menuOpen = filemenu.Append(wx.ID_OPEN, '&Open', ' Open a file to edit')
+        menuOpen = filemenu.Append(wx.ID_OPEN, '&Open Text file', ' Open a text file to tag')
+        menuSave = filemenu.Append(wx.ID_SAVE, '&Save', ' Save tagged file')
+        menuLoadSave = filemenu.Append(wx.ID_FILE, '&Load Saved File', ' Open a tagged (.tag) file')
         menuAbout = filemenu.Append(wx.ID_ABOUT, '&About', ' Information about this program')
         filemenu.AppendSeparator()
         menuExit = filemenu.Append(wx.ID_EXIT, 'E&xit', ' Terminate the program')
@@ -96,6 +99,8 @@ class MainWindow(wx.Frame):
 
         # Events.
         self.Bind(wx.EVT_MENU, self.on_file_open, menuOpen)
+        self.Bind(wx.EVT_MENU, self.on_file_save, menuSave)
+        self.Bind(wx.EVT_MENU, self.on_load_save, menuLoadSave)
         self.Bind(wx.EVT_MENU, self.on_app_exit, menuExit)
         self.Bind(wx.EVT_MENU, self.on_menu_about, menuAbout)
         self.Bind(wx.EVT_MENU, self.on_editor_config, menuEditorConfig)
@@ -146,7 +151,9 @@ class MainWindow(wx.Frame):
             self.dirname = dlg.GetDirectory()
             path = os.path.join(self.dirname, self.filename)
             with open(path, 'r', encoding='utf-8') as f:
-                self.text_ctrl.SetValue(f.read())
+                txt = f.read()
+                self.text_ctrl.SetValue(txt)
+                self.tag_hist.original_txt = txt
 
             # (re) init the editor
             self.SetStatusText('File: {} Loaded!'.format(path))
@@ -156,7 +163,32 @@ class MainWindow(wx.Frame):
             logging.info('file loaded: {}'.format(path))
         dlg.Destroy()
 
+    def on_file_save(self, evt):
+        if self.filename:
+            dlg = wx.FileDialog(self, 'Save As', self.dirname, '{}'.format(self.filename[:-4]), '*.tag', wx.FD_SAVE)
+            if dlg.ShowModal() == wx.ID_OK:
+                save_path = dlg.GetPath()
+                self.tag_hist.save(save_path)
+                dlg.Destroy()
 
+                logging.info('tag file saved into: {}'.format(save_path))
+
+    def on_load_save(self, evt):
+        dlg = wx.FileDialog(self, 'Load tagged file', self.dirname, '', '*.tag', wx.FD_OPEN)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.filename = dlg.GetFilename()
+            self.dirname = dlg.GetDirectory()
+            save_path = dlg.GetPath()
+
+            # load and paint tags
+            self.tag_hist = h.TagHistory.from_save(save_path)
+            self.text_ctrl.SetValue(self.tag_hist.original_txt)
+            for t in self.tag_hist.tags:
+                sel_start, sel_end = t[0]
+                self.text_ctrl.SetStyle(sel_start, sel_end, self.TAG_STYLES[self.TAGS.index(t[1])])
+
+            logging.info('loaded tag file from: {}'.format(save_path))
+            logging.debug('tags: {}'.format(str(self.tag_hist.tags)))
 
     def on_editor_config(self, evt):
 
@@ -203,8 +235,6 @@ class MainWindow(wx.Frame):
 
         #  paint tag
         self.text_ctrl.SetStyle(sel_start, sel_end_after, tag_style)
-        self.text_ctrl.SetInsertionPoint(sel_end_after)
-        self.text_ctrl.SetFocus()
 
         # log
         logging.info('TAG add: {} ({}, {}) \"{}\" '.format(selected_tag, sel_start, sel_end, sel_str))
@@ -218,6 +248,9 @@ class MainWindow(wx.Frame):
                 if self.tag_hist.add_tag(sel_range, selected_tag) is not None:
                     self.text_ctrl.SetStyle(*sel_range, tag_style)
                     logging.info('TAG sugg: {} ({}, {}) \"{}\" '.format(selected_tag, *sel_range, s.group(0)))
+
+        self.text_ctrl.SetInsertionPoint(sel_end_after)
+        self.text_ctrl.SetFocus()
 
         logging.debug('tags: {}'.format(str(list(self.tag_hist.tags.irange_key()))))
         logging.debug('history: {}'.format(str(self.tag_hist.history)))
@@ -246,6 +279,10 @@ class MainWindow(wx.Frame):
     def on_btn_tag_remove(self, evt):
         sel_range = self.text_ctrl.GetSelection()
         sel_tag = self.tag_hist.delete_tag(sel_range)
+
+        if sel_tag is None:
+            return
+
         pos_b, pos_e = sel_tag[0]
         sel_end_after = pos_e
 

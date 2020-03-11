@@ -1,4 +1,5 @@
 import re
+import pickle
 from itertools import chain
 
 from sortedcontainers import sortedlist
@@ -22,10 +23,21 @@ def get_key_name(key_code):
 class TagHistory:
 
     def __init__(self, original_txt=None):
-        self.tags = sortedlist.SortedKeyList(key=lambda x: x[0][0])
+        self.tags = sortedlist.SortedKeyList(key=self._key)
         self.history = []
-        self.suggestion = sortedlist.SortedKeyList(key=lambda x: x[0][0])
         self.original_txt = original_txt
+
+    @classmethod
+    def from_save(cls, path):
+        hist = pickle.load(open(path, 'rb'))
+        return hist
+
+    def _key(self, x):
+        return x[0][0]
+
+    def save(self, filename):
+        self.history = []
+        pickle.dump(self, open(filename, 'wb'))
 
     def set_original_txt(self, original_txt):
         self.original_txt = original_txt
@@ -104,10 +116,10 @@ def suggest_tag(token, text, with_bigram=True):
 
 
 def check_range_intersect(range_a, range_b):
-        a_s, a_e = range_a
-        b_s, b_e = range_b
+    a_s, a_e = range_a
+    b_s, b_e = range_b
 
-        if b_s > a_e or a_s > b_e:
-            return False
+    if b_s > a_e or a_s > b_e:
+        return False
 
-        return True
+    return True
